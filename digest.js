@@ -1,6 +1,7 @@
 // AI News Daily Digest -> WhatsApp
 // Fetches recent AI news from multiple RSS sources, asks Claude to pick the
-// top 10 and summarize them, then sends the digest to your own WhatsApp via CallMeBot.
+// top 10 and summarize them, then sends the digest to your own WhatsApp via
+// Twilio's WhatsApp Sandbox.
 
 import Parser from "rss-parser";
 import Anthropic from "@anthropic-ai/sdk";
@@ -85,17 +86,58 @@ Under each header, list items as "- <one punchy line, max 20 words> (<link>)". K
   return msg.content.map((b) => b.text || "").join("\n");
 }
 
-// --- 3. Send via WhatsApp (CallMeBot) -----------------------------------
+// --- 3. Send via WhatsApp (Twilio Sandbox) ------------------------------
+// Uses Twilio's REST API directly via fetch — no SDK dependency needed.
 async function sendWhatsApp(text) {
-  const phone = process.env.WHATSAPP_PHONE;   // your number, with country code, no + or spaces
-  const apikey = process.env.CALLMEBOT_APIKEY; // get this once via CallMeBot's WhatsApp opt-in
-  const url = `https://api.callmebot.com/whatsapp.php?phone=${phone}&text=${encodeURIComponent(
-    text
-  )}&apikey=${apikey}`;
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_WHATSAPP_FROM; // e.g. "whatsapp:+14155238886" (the sandbox number)
+  const to = process.env.WHATSAPP_TO;            // e.g. "whatsapp:+9198XXXXXXXX"
 
-  const res = await fetch(url);
-  const body = await res.text();
-  console.log("CallMeBot response:", body);
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+
+  // Twilio caps a single message body at 1600 characters. If Claude's
+  // digest runs longer, split it into chunks on line boundaries so no
+  // section gets cut mid-sentence.
+  const chunks = splitIntoChunks(text, 1550);
+
+  for (const [idx, chunk] of chunks.entries()) {
+    const body = new URLSearchParams({ From: from, To: to, Body: chunk });
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      console.error(`Twilio error on chunk ${idx + 1}/${chunks.length}:`, data);
+      throw new Error(data.message || "Twilio send failed");
+    }
+    console.log(`Sent chunk ${idx + 1}/${chunks.length}, sid: ${data.sid}`);
+  }
+}
+
+function splitIntoChunks(text, maxLen) {
+  if (text.length <= maxLen) return [text];
+  const lines = text.split("\n");
+  const chunks = [];
+  let current = "";
+  for (const line of lines) {
+    if ((current + "\n" + line).length > maxLen) {
+      chunks.push(current);
+      current = line;
+    } else {
+      current = current ? `${current}\n${line}` : line;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
 }
 
 // --- Run ----------------------------------------------------------------
