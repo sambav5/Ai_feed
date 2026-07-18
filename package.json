@@ -1,0 +1,14 @@
+{
+  "name": "ai-digest-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Daily AI news digest sent to WhatsApp",
+  "main": "digest.js",
+  "scripts": {
+    "start": "node digest.js"
+  },
+  "dependencies": {
+    "rss-parser": "^3.13.0",
+    "@anthropic-ai/sdk": "^0.32.0"
+  }
+}
