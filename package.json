@@ -1,0 +1,14 @@
+{
+  "name": "dental-implant-research-agent",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Monthly research agent tracking dental implant workflow pain points across public forums",
+  "main": "research.js",
+  "scripts": {
+    "start": "node research.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "xlsx": "^0.18.5"
+  }
+}
